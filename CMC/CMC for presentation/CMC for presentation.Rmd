@@ -1,0 +1,983 @@
+---
+title: "CMC for Presentation"
+author: "Bo Wang"
+date: "December 20, 2016"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, echo=FALSE, include=FALSE}
+library(dplyr)
+library(plyr)
+library(ggplot2)
+library("fmsb")
+```
+
+1. Data: CMC-Interposition arthroplasty, intercarpal or carpometacarpal joints (25447) and Arthroplasty with prosthetic replacement, trapezium (25445). 
+
+```{r, echo=FALSE, include=FALSE}
+load(file="CMC.RDA")
+load(file = "CMC05_06.RDA")
+load(file = "CMC07.RDA")
+load(file = "CMC08.RDA")
+load(file = "CMC09.RDA")
+load(file = "CMC10.RDA")
+load(file = "CMC11.RDA")
+load(file = "CMC12.RDA")
+load(file = "CMC13.RDA")
+load(file = "CMC14.RDA")
+load(file = "CMC15.RDA")
+```
+
+2. Basic summary of CMC data
+
+Number of patients and variables overall
+```{r, echo=FALSE, include=FALSE}
+dim<-dim(CMC)
+names(dim)<-c("patients", "variables")
+dim
+```
+
+Number of patients and variables for each year
+```{r, echo=FALSE, include=FALSE}
+dim05_06<-dim(CMC05_06)
+dim07<-dim(CMC07)
+dim08<-dim(CMC08)
+dim09<-dim(CMC09)
+dim10<-dim(CMC10)
+dim11<-dim(CMC11)
+dim12<-dim(CMC12)
+dim13<-dim(CMC13)
+dim14<-dim(CMC14)
+dim15<-dim(CMC15)
+dims<-c(dim05_06, dim07, dim08, dim09, dim10, dim11, dim12, dim13, dim14, dim15)
+dims<-as.data.frame(matrix(dims, nrow = 2))
+rownames(dims)<-c("patients", "variables")
+colnames(dims)<-c("2005-06", "2007", "2008", "2009", "2010", "2011", "2012", "2013", "2014", "2015")
+dims
+```
+
+
+
+3. Complications
+
+Number of unique patients with complications (1.6%)
+```{r, echo=FALSE}
+### function to assign Y/N complication column 
+complicationOrNot<-function(df){
+  Complication<-vector()
+  complications<-c("SUPINFEC", "WNDINFD", "ORGSPCSSI",
+        "DEHIS", "OUPNEUMO", "REINTUB", "PULEMBOL","FAILWEAN", 
+        "RENAINSF", "OPRENAFL", "URNINFEC", "CNSCVA",
+        "CDARREST", "CDMI", "OTHBLEED", "OTHDVT", "OTHSYSEP", 
+        "OTHSESHOCK", "OTHGRAFL", "CNSCOMA", "NEURODEF",
+        "OTHCDIFF",   ## "OTHCDIFF" added in 2015, no cases
+        "RETORRELATED", "READMRELATED1", "DOPERTOD")
+for(i in 1:nrow(df)) {if((all(df[,complications][i,]=="No" 
+                          | df[,complications][i,]=="No Complication"
+                          | df[,complications][i,]=="NULL"
+                          | df[,complications][i,]== -99
+                          | df[,complications][i,]=="Unknown"
+                          | is.na(df[,complications][i,])))==TRUE){
+                 Complication[i]<-"FALSE"
+                 } else {
+                 Complication[i]<-"TRUE"}}
+  df<-cbind(df, Complication)
+}
+#CMCaddComplication<-complicationOrNot(CMC)
+#CMCaddComplication[CMC$DOPERTOD==29,]$Complication<-TRUE
+
+load("CMCaddComplication.RDA")
+
+table(CMCaddComplication$Complication)
+```
+
+Distribution of complications
+```{r, echo=FALSE}
+CMCwithComplication<-CMCaddComplication[CMCaddComplication$Complication==TRUE,]
+CMCwoComplication<-CMCaddComplication[CMCaddComplication$Complication==FALSE,]
+complicationTables<-list(
+table(CMCwithComplication$SUPINFEC),
+table(CMCwithComplication$WNDINFD),
+table(CMCwithComplication$ORGSPCSSI),
+table(CMCwithComplication$DEHIS),
+table(CMCwithComplication$OUPNEUMO),
+table(CMCwithComplication$PULEMBOL),
+table(CMCwithComplication$REINTUB),
+table(CMCwithComplication$FAILWEAN),
+table(CMCwithComplication$CDARREST),
+table(CMCwithComplication$CDMI),
+table(CMCwithComplication$RENAINSF),
+table(CMCwithComplication$OPRENAFL),
+table(CMCwithComplication$CNSCVA),
+table(CMCwithComplication$OTHGRAFL),
+table(CMCwithComplication$CNSCOMA),
+table(CMCwithComplication$NEURODEF),
+table(CMCwithComplication$OTHDVT),
+table(CMCwithComplication$OTHSYSEP),
+table(CMCwithComplication$OTHSESHOCK),
+table(CMCwithComplication$RETORRELATED),
+table(CMCwithComplication$OTHBLEED),
+table(CMCwithComplication$URNINFEC),
+table(CMCwithComplication$READMRELATED1)
+)
+
+compl1<-c("SUPINFEC", "WNDINFD", 
+        "ORGSPCSSI",
+        "DEHIS", "OUPNEUMO","PULEMBOL", 
+        "REINTUB", "FAILWEAN", 
+        "CDARREST","CDMI", "RENAINSF", "OPRENAFL",
+        "CNSCVA", "OTHGRAFL",
+        "CNSCOMA","NEURODEF", "OTHDVT",
+        "OTHSYSEP", "OTHSESHOCK",
+        "RETORRELATED", "OTHBLEED",
+        "URNINFEC", "READMRELATED1")
+complicationdfs<-lapply(complicationTables, tbToDf)
+names(complicationdfs)<-compl1
+complicationdfs
+```
+
+
+RETURNOR/READMISSION
+```{r, echo=FALSE, include=FALSE}
+load(file = "READMISSION.RDA")
+load(file = "RETURNOR.RDA")
+READMISSION
+RETURNOR
+```
+
+
+
+4. 2*2 Tables and Chi-squared analysis (categorical variable v. Complication (Y/N))
+
+```{r}
+##function to get rid of all 0 rows in a table
+ridZero<-function(tb){
+  num<-1
+  while(num<=dim(tb)[1]){
+    if(all(tb[num,]==0)==TRUE){
+      tb<-tb[-num,]
+      num<-num
+    }else{
+      tb<-tb
+      num<-num+1
+    }
+  }
+  tb
+}
+
+## Fisher's exact or chi-squared 
+## https://www.graphpad.com/guides/prism/6/statistics/index.htm?stat_chi-square_or_fishers_test.htm
+```
+
+SEX check
+```{r, echo=FALSE}
+SEXtb<-table(CMCaddComplication[, c("SEX", "Complication")])
+SEXtb
+SEXtb<-SEXtb[-3,]
+SEXtb
+SEXchisq<-chisq.test(SEXtb, simulate.p.value = TRUE)
+SEXchisq$p.value
+```
+
+RACE check
+```{r, echo=FALSE}
+RACEtb<-table(CMCaddComplication[, c("RACE", "Complication")])
+RACEtb
+RACEtb[5,]<-c(495, 8)
+RACEtb<-RACEtb[c(-1,-4),]
+RACEtb
+RACEchisq<-chisq.test(RACEtb, simulate.p.value = TRUE)
+RACEchisq$p.value
+```
+
+INOUT check
+```{r, echo=FALSE}
+INOUTtb<-table(CMCaddComplication[, c("INOUT", "Complication")])
+INOUTtb<-INOUTtb[-3,]
+INOUTtb
+INOUTchisq<-chisq.test(INOUTtb, simulate.p.value = TRUE)
+INOUTchisq$p.value
+INOUTtb[,1]/(INOUTtb[,1]+INOUTtb[,2])
+```
+
+
+TRANSFUS
+```{r, echo=FALSE}
+TRANSFUStb<-table(CMCaddComplication[, c("TRANSFUS", "Complication")])
+TRANSFUStb<-ridZero(TRANSFUStb)
+TRANSFUStb
+TRANSFUSchisq<-chisq.test(TRANSFUStb, simulate.p.value = TRUE)
+TRANSFUSchisq$p.value
+```
+
+PROPER30
+```{r, echo=FALSE}
+PROPER30tb<-table(CMCaddComplication[, c("PROPER30", "Complication")])
+PROPER30tb<-ridZero(PROPER30tb)
+PROPER30tb<-PROPER30tb[-2,]
+PROPER30chisq<-chisq.test(PROPER30tb, simulate.p.value = TRUE)
+PROPER30chisq$p.value
+```
+
+TRANST
+```{r, echo=FALSE}
+TRANSTtb<-table(CMCaddComplication[, c("TRANST", "Complication")])
+TRANSTtb<-ridZero(TRANSTtb)
+TRANSTtb
+TRANSTchisq<-chisq.test(TRANSTtb, simulate.p.value = TRUE)
+TRANSTchisq$p.value
+
+TRANSTtb2<-TRANSTtb[c(1,4),]
+TRANSTtb2
+TRANSTchisq2<-chisq.test(TRANSTtb2, simulate.p.value = TRUE)
+TRANSTchisq2$p.value
+```
+
+ATTEND check
+```{r, echo=FALSE}
+ATTENDtb<-table(CMCaddComplication[, c("ATTEND", "Complication")])
+ATTENDtb<-ridZero(ATTENDtb)
+ATTENDtb
+ATTENDtb2<-ATTENDtb[c(-3,-5),]
+ATTENDtb2
+ATTENDchisq2<-chisq.test(ATTENDtb2, simulate.p.value = TRUE)
+ATTENDchisq2$p.value
+```
+
+
+Resident vs No resident check
+```{r}
+ATTEND<-matrix(c((498+84),9,238,6),nrow = 2, byrow = TRUE)
+rownames(ATTEND)<-c("No resident", "Resident")
+colnames(ATTEND)<-c("FALSE", "TRUE")
+ATTEND<-as.table(ATTEND)
+ATTEND
+ATTENDchisq<-chisq.test(ATTEND, simulate.p.value = TRUE)
+ATTENDchisq$p.value
+ATTEND[,1]/(ATTEND[,1]+ATTEND[,2])
+```
+
+
+70+ or not
+```{r, echo=FALSE}
+CMC70plus<-CMCaddComplication[CMCaddComplication$AGE>=70,]
+CMCbelow70<-CMCaddComplication[CMCaddComplication$AGE<70,]
+table(CMCbelow70$Complication)
+table(CMC70plus$Complication)
+seventyPLUS<-matrix(c(688,16, 2611, 29), nrow = 2, byrow = TRUE)
+rownames(seventyPLUS)<-c("Yes", "No")
+colnames(seventyPLUS)<-c("FALSE", "TRUE")
+seventyPLUS<-as.table(seventyPLUS)
+seventyPLUS
+seventyPLUSchisq<-chisq.test(seventyPLUS, simulate.p.value = TRUE)
+seventyPLUSchisq$p.value
+seventyPLUS[,1]/(seventyPLUS[,1]+seventyPLUS[,2])
+```
+
+
+65+ or not
+```{r, echo=FALSE}
+CMC65plus<-CMCaddComplication[CMCaddComplication$AGE>=65,]
+CMCbelow65<-CMCaddComplication[CMCaddComplication$AGE<65,]
+table(CMCbelow65$Complication)
+table(CMC65plus$Complication)
+sixtyfivePLUS<-matrix(c(1321,25, 1978, 20), nrow = 2, byrow = TRUE)
+rownames(sixtyfivePLUS)<-c("Yes", "No")
+colnames(sixtyfivePLUS)<-c("FALSE", "TRUE")
+sixtyfivePLUS<-as.table(sixtyfivePLUS)
+sixtyfivePLUS
+sixtyfivePLUSchisq<-chisq.test(sixtyfivePLUS, simulate.p.value = TRUE)
+sixtyfivePLUSchisq$p.value
+sixtyfivePLUS[,1]/(sixtyfivePLUS[,1]+sixtyfivePLUS[,2])
+```
+
+
+60+ or not
+```{r, echo=FALSE}
+CMC60plus<-CMCaddComplication[CMCaddComplication$AGE>=60,]
+CMCbelow60<-CMCaddComplication[CMCaddComplication$AGE<60,]
+table(CMCbelow60$Complication)
+table(CMC60plus$Complication)
+sixtyPLUS<-matrix(c(1994,29, 1305, 16), nrow = 2, byrow = TRUE)
+rownames(sixtyPLUS)<-c("Yes", "No")
+colnames(sixtyPLUS)<-c("FALSE", "TRUE")
+sixtyPLUS<-as.table(sixtyPLUS)
+sixtyPLUS
+sixtyPLUSchisq<-chisq.test(sixtyPLUS, simulate.p.value = TRUE)
+sixtyPLUSchisq$p.value
+sixtyPLUS[,1]/(sixtyPLUS[,1]+sixtyPLUS[,2])
+```
+
+
+ANESTHES check
+```{r, echo=FALSE}
+ANESTHEStb<-table(CMCaddComplication[, c("ANESTHES", "Complication")])
+ANESTHEStb<-ridZero(ANESTHEStb)
+ANESTHEStb
+ANESTHESchisq<-chisq.test(ANESTHEStb, simulate.p.value = TRUE)
+ANESTHESchisq$p.value
+ANESTHEStb[,2]/(ANESTHEStb[,1]+ANESTHEStb[,2])
+ANESTHEStb2<-ANESTHEStb[c(2,7,11),]
+ANESTHEStb2
+ANESTHESchisq2<-chisq.test(ANESTHEStb2, simulate.p.value = TRUE)
+ANESTHESchisq2$p.value
+ANESTHEStb2[,2]/(ANESTHEStb2[,1]+ANESTHEStb2[,2])
+```
+
+General anesthesia vs all others check
+```{r}
+ANE2<-matrix(c(2268, 32, (1+6+22+4+7+553+2+429), 13), nrow = 2, byrow = TRUE)
+rownames(ANE2)<-c("General", "Others")
+colnames(ANE2)<-c("FALSE", "TRUE")
+ANE2<-as.table(ANE2)
+ANE2
+ANE2chisq<-chisq.test(ANE2, simulate.p.value = TRUE)
+ANE2chisq$p.value
+ANE2[,1]/(ANE2[,1]+ANE2[,2])
+```
+
+SURGSPEC
+```{r, echo=FALSE}
+SURGSPECtb<-table(CMCaddComplication[, c("SURGSPEC", "Complication")])
+SURGSPECtb<-ridZero(SURGSPECtb)
+SURGSPECtb
+SURGSPECchisq<-chisq.test(SURGSPECtb, simulate.p.value = TRUE)
+SURGSPECchisq$p.value
+SURGSPECtb2<-SURGSPECtb[c(3,5),]
+SURGSPECtb2
+SURGSPECchisq2<-chisq.test(SURGSPECtb2, simulate.p.value = TRUE)
+SURGSPECchisq2$p.value
+SURGSPECtb2[,1]/(SURGSPECtb2[,1]+SURGSPECtb2[,2])
+```
+
+DIABETES check
+```{r, echo=FALSE}
+DIABETEStb<-table(CMCaddComplication[, c("DIABETES", "Complication")])
+DIABETEStb<-ridZero(DIABETEStb)
+DIABETEStb
+DIABETESchisq<-chisq.test(DIABETEStb, simulate.p.value = TRUE)
+DIABETESchisq$p.value
+DIABETEStb[,2]/(DIABETEStb[,1]+DIABETEStb[,2])
+CMCaddComplication$DIABETES<-factor(CMCaddComplication$DIABETES, levels = c("NO", "INSULIN", "ORAL","NON-INSULIN"))
+```
+
+No Diabetes v Yes Diabetes 
+```{r, echo=FALSE}
+DIA<-matrix(c(2961, 43, 338, 8), nrow = 2, byrow = TRUE)
+rownames(DIA)<-c("No", "Yes")
+colnames(DIA)<-c("FALSE", "TRUE")
+DIA<-as.table(DIA)
+DIA
+DIAchisq<-chisq.test(DIA, simulate.p.value = TRUE)
+DIAchisq$p.value
+
+```
+
+No Diabetes v Insulin check
+```{r, echo=FALSE}
+DIA2<-matrix(c(2961, 37, 110, 5), nrow = 2, byrow = TRUE)
+rownames(DIA2)<-c("No", "Insulin")
+colnames(DIA2)<-c("FALSE", "TRUE")
+DIA2<-as.table(DIA2)
+DIA2
+DIA2chisq<-chisq.test(DIA2, simulate.p.value = TRUE)
+DIA2chisq$p.value
+```
+
+No Insulin v Insulin check
+```{r, echo=FALSE}
+DIA3<-matrix(c(3189, 40, 110, 5), nrow = 2, byrow = TRUE)
+rownames(DIA3)<-c("No insulin", "Insulin")
+colnames(DIA3)<-c("FALSE", "TRUE")
+DIA3<-as.table(DIA3)
+DIA3
+DIA3chisq<-chisq.test(DIA3, simulate.p.value = TRUE)
+DIA3chisq$p.value
+DIA3[,2]/(DIA3[,1]+DIA3[,2])
+```
+
+WOUND_CLOSURE check
+```{r, echo=FALSE}
+WOUND_CLOSUREtb<-table(CMCaddComplication[, c("WOUND_CLOSURE", "Complication")])
+WOUND_CLOSUREtb<-ridZero(WOUND_CLOSUREtb)
+WOUND_CLOSUREtb
+WOUND_CLOSUREchisq<-chisq.test(WOUND_CLOSUREtb, simulate.p.value = TRUE)
+WOUND_CLOSUREchisq$p.value
+WOUND_CLOSUREtb[,1]/(WOUND_CLOSUREtb[,1]+WOUND_CLOSUREtb[,2])
+
+WOUND_CLOSURE2<-matrix(c(1537, 26, 2, 0), nrow = 2, byrow = TRUE)
+rownames(WOUND_CLOSURE2)<-c("Closed", "Not closed")
+colnames(WOUND_CLOSURE2)<-c("FALSE", "TRUE")
+WOUND_CLOSURE2<-as.table(WOUND_CLOSURE2)
+WOUND_CLOSURE2
+WOUND_CLOSURE2chisq<-chisq.test(WOUND_CLOSURE2, simulate.p.value = TRUE)
+WOUND_CLOSURE2chisq$p.value
+WOUND_CLOSURE2[,1]/(WOUND_CLOSURE2[,1]+WOUND_CLOSURE2[,2])
+```
+
+
+ETHNICITY_HISPANIC check
+```{r, echo=FALSE}
+ETHNICITY_HISPANICtb<-table(CMCaddComplication[, c("ETHNICITY_HISPANIC", "Complication")])
+ETHNICITY_HISPANICtb<-ridZero(ETHNICITY_HISPANICtb)
+ETHNICITY_HISPANICtb<-ETHNICITY_HISPANICtb[1:2,]
+ETHNICITY_HISPANICtb
+ETHNICITY_HISPANICchisq<-chisq.test(ETHNICITY_HISPANICtb, simulate.p.value = TRUE)
+ETHNICITY_HISPANICchisq$p.value
+ETHNICITY_HISPANICtb[,1]/(ETHNICITY_HISPANICtb[,1]+ETHNICITY_HISPANICtb[,2])
+```
+
+
+DIALYSIS check
+```{r, echo=FALSE}
+DIALYSIStb<-table(CMCaddComplication[, c("DIALYSIS", "Complication")])
+DIALYSIStb<-ridZero(DIALYSIStb)
+DIALYSIStb
+DIALYSISchisq<-chisq.test(DIALYSIStb, simulate.p.value = TRUE)
+DIALYSISchisq$p.value
+DIALYSIStb[,1]/(DIALYSIStb[,1]+DIALYSIStb[,2])
+```
+
+SMOKE check
+```{r, echo=FALSE}
+SMOKEtb<-table(CMCaddComplication[, c("SMOKE", "Complication")])
+SMOKEtb<-ridZero(SMOKEtb)
+SMOKEtb
+SMOKEchisq<-chisq.test(SMOKEtb, simulate.p.value = TRUE)
+SMOKEchisq$p.value
+```
+
+ETOH(alcohol use) check
+```{r, echo=FALSE}
+ETOHtb<-table(CMCaddComplication[, c("ETOH", "Complication")])
+ETOHtb<-ridZero(ETOHtb)
+ETOHtb<-ETOHtb[-3,]
+ETOHtb
+ETOHchisq<-chisq.test(ETOHtb, simulate.p.value = TRUE)
+ETOHchisq$p.value
+```
+
+CVA(cerebrovascular accident) check
+```{r, echo=FALSE}
+CVAtb<-table(CMCaddComplication[, c("CVA", "Complication")])
+CVAtb<-ridZero(CVAtb)
+CVAtb<-CVAtb[-3,]
+CVAtb
+CVAchisq<-chisq.test(CVAtb, simulate.p.value = TRUE)
+CVAchisq$p.value
+
+CVANOtb<-table(CMCaddComplication[, c("CVANO", "Complication")])
+CVANOtb<-ridZero(CVANOtb)
+CVANOtb<-CVANOtb[-3,]
+CVANOtb
+CVANOchisq<-chisq.test(CVANOtb, simulate.p.value = TRUE)
+CVANOchisq$p.value
+```
+
+HXTIA (transient ischemic attack) check
+```{r, echo=FALSE}
+HXTIAtb<-table(CMCaddComplication[, c("HXTIA", "Complication")])
+HXTIAtb<-ridZero(HXTIAtb)
+HXTIAtb<-HXTIAtb[-3,]
+HXTIAtb
+HXTIAchisq<-chisq.test(HXTIAtb, simulate.p.value = TRUE)
+HXTIAchisq$p.value
+```
+
+CVA or TIA check
+```{r, echo=FALSE}
+CVATIAOrNot<-function(df){
+  CVATIA<-vector()
+  temp<-df[, c("CVA", "CVANO", "HXTIA")]
+for(i in 1:nrow(df)) {if(any(temp[i,]=="Yes")){
+                 CVATIA[i]<-"Yes"
+                 } else {
+                 CVATIA[i]<-"No"}}
+  df<-cbind(df, CVATIA)
+}
+
+CVAY<-CMC[CMC$CVA=="Yes",]$CASEID
+CVAY<-CVAY[1:10]
+CVAN<-CMC[CMC$CVA=="No",]$CASEID
+CVAN<-CVAN[1:826]
+CVAID<-c(CVAY, CVAN)
+
+CVANOY<-CMC[CMC$CVANO=="Yes",]$CASEID
+CVANOY<-CVANOY[1:13]
+CVANON<-CMC[CMC$CVANO=="No",]$CASEID
+CVANON<-CVANON[1:824]
+CVANOID<-c(CVANOY, CVANON)
+
+TIAY<-CMC[CMC$HXTIA=="Yes",]$CASEID
+TIAY<-TIAY[1:34]
+TIAN<-CMC[CMC$HXTIA=="No",]$CASEID
+TIAN<-TIAN[1:802]
+TIAID<-c(TIAY, TIAN)
+
+Y<-Reduce(union, list(CVAY, CVANOY, TIAY))
+N<-Reduce(union, list(CVAN, CVANON, TIAN))
+
+CMCwithCVATIAY<-CMCaddComplication[CMCaddComplication$CASEID %in% Y,]
+CMCwithCVATIAN<-CMCaddComplication[CMCaddComplication$CASEID %in% N,]
+
+CMCwithCVATIAYtb<-table(CMCwithCVATIAY$Complication)
+CMCwithCVATIANtb<-table(CMCwithCVATIAN$Complication)
+
+CVATIA<-matrix(c(821,15,48,1),nrow = 2, byrow = TRUE)
+rownames(CVATIA)<-c("No", "Yes")
+colnames(CVATIA)<-c("FALSE", "TRUE")
+CVATIA<-as.table(CVATIA)
+CVATIA
+CVATIAchisq<-chisq.test(CVATIA, simulate.p.value = TRUE)
+CVATIAchisq$p.value
+```
+
+
+CPT check
+```{r, echo=FALSE}
+CPTtb<-table(CMCaddComplication[, c("CPT", "Complication")])
+CPTtb<-ridZero(CPTtb)
+CPTtb
+CPTchisq<-chisq.test(CPTtb, simulate.p.value = TRUE)
+CPTchisq$p.value
+```
+
+HYPERMED check
+```{r, echo=FALSE}
+HYPERMEDtb<-table(CMCaddComplication[, c("HYPERMED", "Complication")])
+HYPERMEDtb<-ridZero(HYPERMEDtb)
+HYPERMEDtb
+HYPERMEDchisq<-chisq.test(HYPERMEDtb, simulate.p.value = TRUE)
+HYPERMEDchisq$p.value
+```
+
+WNDCLAS check
+```{r, echo=FALSE}
+WNDCLAStb<-table(CMCaddComplication[, c("WNDCLAS", "Complication")])
+WNDCLAStb<-ridZero(WNDCLAStb)
+WNDCLAStb
+WNDCLASchisq<-chisq.test(WNDCLAStb, simulate.p.value = TRUE)
+WNDCLASchisq$p.value
+```
+
+ASACLAS check
+```{r, echo=FALSE}
+ASACLAStb<-table(CMCaddComplication[, c("ASACLAS", "Complication")])
+ASACLAStb<-ridZero(ASACLAStb)
+ASACLAStb<-ASACLAStb[-5,]
+ASACLAStb
+ASACLASchisq<-chisq.test(ASACLAStb, simulate.p.value = TRUE)
+ASACLASchisq$p.value
+ASACLAStb[,2]/(ASACLAStb[,1]+ASACLAStb[,2])
+
+ASAtemp<-matrix(c(2284,25, 959,20),nrow = 2, byrow = TRUE)
+rownames(ASAtemp)<-c("onetwo", "threefour")
+colnames(ASAtemp)<-c("FALSE", "TRUE")
+ASAtemp<-as.table(ASAtemp)
+ASAtemp
+ASAtempchisq<-chisq.test(ASAtemp, simulate.p.value = TRUE)
+ASAtempchisq$p.value
+```
+
+BLEEDDIS check
+```{r, echo=FALSE}
+BLEEDDIStb<-table(CMCaddComplication[, c("BLEEDDIS", "Complication")])
+BLEEDDIStb<-ridZero(BLEEDDIStb)
+BLEEDDIStb
+BLEEDDISchisq<-chisq.test(BLEEDDIStb, simulate.p.value = TRUE)
+BLEEDDISchisq$p.value
+BLEEDDIStb[,2]/(BLEEDDIStb[,1]+BLEEDDIStb[,2])
+```
+
+HXCHF (congestive heart failure) check
+```{r, echo=FALSE}
+HXCHFtb<-table(CMCaddComplication[, c("HXCHF", "Complication")])
+HXCHFtb<-ridZero(HXCHFtb)
+HXCHFtb
+HXCHFchisq<-chisq.test(HXCHFtb, simulate.p.value = TRUE)
+HXCHFchisq$p.value
+```
+
+HXPVD (peripheral vascular disease) check
+```{r, echo=FALSE}
+HXPVDtb<-table(CMCaddComplication[, c("HXPVD", "Complication")])
+HXPVDtb<-ridZero(HXPVDtb)
+HXPVDtb<-HXPVDtb[-3,]
+HXPVDtb
+HXPVDchisq<-chisq.test(HXPVDtb, simulate.p.value = TRUE)
+HXPVDchisq$p.value
+```
+
+FNSTATUS2 (Functional status before surgery) check
+```{r, echo=FALSE}
+FNSTATUS2tb<-table(CMCaddComplication[, c("FNSTATUS2", "Complication")])
+FNSTATUS2tb
+FNSTATUS2tb<-ridZero(FNSTATUS2tb)
+FNSTATUS2tb<-FNSTATUS2tb[-3,]
+FNSTATUS2tb
+FNSTATUS2chisq<-chisq.test(FNSTATUS2tb, simulate.p.value = TRUE)
+FNSTATUS2chisq$p.value
+```
+
+STEROID check
+```{r, echo=FALSE}
+STEROIDtb<-table(CMCaddComplication[, c("STEROID", "Complication")])
+STEROIDtb<-ridZero(STEROIDtb)
+STEROIDtb
+STEROIDchisq<-chisq.test(STEROIDtb, simulate.p.value = TRUE)
+STEROIDchisq$p.value
+STEROIDtb[,1]/(STEROIDtb[,1]+STEROIDtb[,2])
+```
+
+
+PRVPCS (previous cardiac surgery) check
+```{r, echo=FALSE}
+PRVPCStb<-table(CMCaddComplication[, c("PRVPCS", "Complication")])
+PRVPCStb<-ridZero(PRVPCStb)
+PRVPCStb<-PRVPCStb[-3,]
+PRVPCStb
+PRVPCSchisq<-chisq.test(PRVPCStb, simulate.p.value = TRUE)
+PRVPCSchisq$p.value
+```
+
+
+HXANGINA check
+```{r, echo=FALSE}
+HXANGINAtb<-table(CMCaddComplication[, c("HXANGINA", "Complication")])
+HXANGINAtb<-ridZero(HXANGINAtb)
+HXANGINAtb<-HXANGINAtb[-3,]
+HXANGINAtb
+HXANGINAchisq<-chisq.test(HXANGINAtb, simulate.p.value = TRUE)
+HXANGINAchisq$p.value
+```
+
+
+CHEMO
+```{r, echo=FALSE}
+CHEMOtb<-table(CMCaddComplication[, c("CHEMO", "Complication")])
+CHEMOtb<-ridZero(CHEMOtb)
+CHEMOtb<-CHEMOtb[-3,]
+CHEMOtb
+CHEMOchisq<-chisq.test(CHEMOtb, simulate.p.value = TRUE)
+CHEMOchisq$p.value
+```
+
+RADIO
+```{r, echo=FALSE}
+RADIOtb<-table(CMCaddComplication[, c("RADIO", "Complication")])
+RADIOtb<-ridZero(RADIOtb)
+RADIOtb<-RADIOtb[-3,]
+RADIOtb
+RADIOchisq<-chisq.test(RADIOtb, simulate.p.value = TRUE)
+RADIOchisq$p.value
+```
+
+
+CHEMO or RADIO check
+```{r, echo=FALSE}
+CHEMOY<-CMC[CMC$CHEMO=="Yes",]$CASEID
+CHEMOY<-CHEMOY[1]
+CHEMON<-CMC[CMC$CHEMO=="No",]$CASEID
+CHEMON<-CHEMON[1:835]
+CHEMOID<-c(CHEMOY, CHEMON)
+
+RADIOY<-CMC[CMC$RADIO=="Yes",]$CASEID
+RADION<-CMC[CMC$RADIO=="No",]$CASEID
+RADION<-RADION[1:836]
+Y<-Reduce(union, list(CHEMOY))
+N<-Reduce(union, list(CHEMON, RADION))
+
+CMCwithCHEMORADIOY<-CMCaddComplication[CMCaddComplication$CASEID %in% Y,]
+CMCwithCHEMORADION<-CMCaddComplication[CMCaddComplication$CASEID %in% N,]
+
+table(CMCwithCHEMORADIOY$Complication)
+table(CMCwithCHEMORADION$Complication)
+
+CHEMORADIO<-matrix(c(821,15,1,0),nrow = 2, byrow = TRUE)
+rownames(CHEMORADIO)<-c("No", "Yes")
+colnames(CHEMORADIO)<-c("FALSE", "TRUE")
+CHEMORADIO<-as.table(CHEMORADIO)
+CHEMORADIO
+CHEMORADIOchisq<-chisq.test(CHEMORADIO, simulate.p.value = TRUE)
+CHEMORADIOchisq$p.value
+```
+
+
+PRVPCI (all but year 2015) (previous Percutaneous Coronary Intervention) check
+```{r, echo=FALSE}
+PRVPCItb<-table(CMCaddComplication[, c("PRVPCI", "Complication")])
+PRVPCItb<-ridZero(PRVPCItb)
+PRVPCItb<-PRVPCItb[-3,]
+PRVPCItb
+PRVPCIchisq<-chisq.test(PRVPCItb, simulate.p.value = TRUE)
+PRVPCIchisq$p.value
+PRVPCItb[,1]/(PRVPCItb[,1]+PRVPCItb[,2])
+
+```
+
+TRANSFUS
+```{r, echo=FALSE}
+TRANSFUStb<-table(CMCaddComplication[, c("TRANSFUS", "Complication")])
+TRANSFUStb
+```
+
+
+
+Predictors I didn't find in dataset (PUF):
+
+Intra-articular fracture
+
+Associated ORIF ulna styloid
+
+Current alcohol use
+
+Preoperative function - FNSTATUS1/FNSTATUS2
+All year but 2015 has both variables, 2015 only has FNSTATUS2
+```{r}
+table(CMCaddComplication$FNSTATUS1)
+```
+
+Chronic pulmonary obstructive disease
+
+Peripheral vascular disease
+
+Cardiac disease
+
+Cerebrovascular accident or transient ischemic attack
+
+
+
+5. T-tests (Continuous variable v. Complication (Y/N)))
+
+WORKRVU
+```{r, echo=FALSE}
+WORKRVUtt<-t.test(WORKRVU~Complication, data = CMCaddComplication)
+WORKRVUtt$p.value
+```
+
+AGE check
+```{r}
+AGEtt<-t.test(AGE~Complication, data = CMCaddComplication)
+AGEtt
+sd(CMCwoComplication$AGE)
+range(CMCwoComplication$AGE)
+sd(CMCwithComplication$AGE)
+range(CMCwithComplication$AGE)
+```
+
+```{r, include=FALSE}
+over65<-function(df){
+  sixtyfive<-vector()
+for(i in 1:nrow(df)) {
+  if(df$AGE[i]>65){
+  sixtyfive[i]<-TRUE
+  } else{
+  sixtyfive[i]<-FALSE
+  }
+  }
+  df<-cbind(df, sixtyfive)
+  df
+}
+
+CMCaddComplication<-over65(CMCaddComplication)
+table(CMCaddComplication[,c("sixtyfive", "Complication")])
+chisq.test(table(CMCaddComplication[,c("sixtyfive", "Complication")]))
+
+ageGroup<-function(df){
+  ageGp<-vector()
+for(i in 1:nrow(df)) {
+  if(df$AGE[i]<=50){
+  ageGp[i]<-"<50"
+  } else if(df$AGE[i]<=60){
+  ageGp[i]<-"51-60"
+  } else if(df$AGE[i]<=70){
+  ageGp[i]<-"61-70"
+  } else if(df$AGE[i]<=80){
+  ageGp[i]<-"71-80"
+  } else{
+  ageGp[i]<-"81-90"
+  }
+  }
+  df<-cbind(df, ageGp)
+  df
+}
+
+chisq.test(table(CMCaddComplication[,c("ageGp", "Complication")]))
+```
+
+BMI check
+```{r, echo=FALSE}
+CMCwHeight<-filter(CMCaddComplication, HEIGHT>=0)
+CMCwHeightWeight<-filter(CMCwHeight, WEIGHT>=0)
+dim(CMCwHeightWeight)
+CMCwHeightWeight$BMI<-CMCwHeightWeight$WEIGHT*0.45/(CMCwHeightWeight$HEIGHT*0.025)^2
+
+BMItt<-t.test(BMI~Complication, data = CMCwHeightWeight)
+BMItt$p.value
+
+sd(CMCwHeightWeight[CMCwHeightWeight$Complication=="TRUE",]$BMI)
+sd(CMCwHeightWeight[CMCwHeightWeight$Complication=="FALSE",]$BMI)
+
+
+bmiGroup<-function(df){
+  bmiGp<-vector()
+for(i in 1:nrow(df)) {
+  if(df$BMI[i]<=18.5){
+  bmiGp[i]<-"underweight"
+  } else if(df$BMI[i]<=25){
+  bmiGp[i]<-"normal"
+  } else if(df$BMI[i]<=30){
+  bmiGp[i]<-"overweight"
+  } else{
+  bmiGp[i]<-"obese"
+  }
+  }
+  df<-cbind(df, bmiGp)
+  df
+}
+
+CMCaddComplication$BMI<-CMCaddComplication$WEIGHT*0.45/(CMCaddComplication$HEIGHT*0.025)^2
+CMCaddComplication<-bmiGroup(CMCaddComplication)
+chisq.test(table(CMCaddComplication[,c("bmiGp", "Complication")]))
+```
+
+PRPT (check)
+```{r}
+CMCwPRPT<-CMCaddComplication[CMCaddComplication$PRPT!=-99,]
+dim(CMCwPRPT)
+table(CMCwPRPT$Complication)
+```
+
+PRINR check
+```{r}
+CMCwPRINR<-CMCaddComplication[CMCaddComplication$PRINR!=-99,]
+dim(CMCwPRINR)
+table(CMCwPRINR$Complication)
+PRINRtt<-t.test(PRINR~Complication, data = CMCwPRINR)
+PRINRtt$p.value
+
+sd(CMCwPRINR[CMCwPRINR$Complication=="TRUE",]$PRINR)
+sd(CMCwPRINR[CMCwPRINR$Complication=="FALSE",]$PRINR)
+```
+
+PRWBC check
+```{r}
+CMCwPRWBC<-filter(CMCaddComplication, PRWBC>=0)
+dim(CMCwPRWBC)
+PRWBCtt<-t.test(PRWBC~Complication, data = CMCwPRWBC)
+PRWBCtt$p.value
+
+sd(CMCwPRWBC[CMCwPRWBC$Complication=="TRUE",]$PRWBC)
+sd(CMCwPRWBC[CMCwPRWBC$Complication=="FALSE",]$PRWBC)
+```
+
+PRCREAT check
+```{r}
+CMCwPRCREAT<-filter(CMCaddComplication, PRCREAT>=0)
+dim(CMCwPRCREAT)
+PRCREATtt<-t.test(PRCREAT~Complication, data = CMCwPRCREAT)
+PRCREATtt$p.value
+
+sd(CMCwPRCREAT[CMCwPRCREAT$Complication=="TRUE",]$PRCREAT)
+sd(CMCwPRCREAT[CMCwPRCREAT$Complication=="FALSE",]$PRCREAT)
+```
+
+PRHCT (Pre-operative hematocrit) check
+```{r}
+CMCwPRHCT<-filter(CMCaddComplication, PRHCT>=0)
+dim(CMCwPRHCT)
+PRHCTtt<-t.test(PRHCT~Complication, data = CMCwPRHCT)
+PRHCTtt
+sd(CMCwPRHCT[CMCwPRHCT$Complication=="TRUE",]$PRHCT)
+sd(CMCwPRHCT[CMCwPRHCT$Complication=="FALSE",]$PRHCT)
+```
+
+OPTIME check
+```{r}
+CMCwOPTIME<-filter(CMCaddComplication, OPTIME>=0)
+CMCwOPTIME$OPTIME<-as.numeric(CMCwOPTIME$OPTIME)
+dim(CMCwOPTIME)
+OPTIMEtt<-t.test(OPTIME~Complication, data = CMCwOPTIME)
+OPTIMEtt$p.value
+sd(CMCwOPTIME[CMCwOPTIME$Complication=="FALSE",]$OPTIME)
+sd(CMCwOPTIME[CMCwOPTIME$Complication=="TRUE",]$OPTIME)
+sd(CMCwoComplication$OPTIME)
+sd(CMCwithComplication$OPTIME)
+range(CMCwoComplication$OPTIME)
+range(CMCwithComplication$OPTIME)
+```
+
+
+HTOODAY check
+```{r}
+CMCwHTOODAY<-filter(CMCaddComplication, HTOODAY>=0)
+CMCwHTOODAY$HTOODAY<-as.numeric(CMCwHTOODAY$HTOODAY)
+dim(CMCwHTOODAY)
+HTOODAYtt<-t.test(HTOODAY~Complication, data = CMCwHTOODAY)
+HTOODAYtt$p.value
+sd(CMCwHTOODAY[CMCwHTOODAY$Complication=="FALSE",]$HTOODAY)
+sd(CMCwHTOODAY[CMCwHTOODAY$Complication=="TRUE",]$HTOODAY)
+
+CMCwSTOODAY<-filter(CMCaddComplication, STOODAY>=0)
+CMCwSTOODAY$STOODAY<-as.numeric(CMCwSTOODAY$STOODAY)
+dim(CMCwSTOODAY)
+STOODAYtt<-t.test(STOODAY~Complication, data = CMCwSTOODAY)
+STOODAYtt$p.value
+sd(CMCwoComplication$STOODAY)
+sd(CMCwithComplication$STOODAY)
+```
+
+
+ANETIME
+```{r}
+CMCwANETIME<-filter(CMCaddComplication, ANETIME>=0)
+CMCwANETIME$ANETIME<-as.numeric(CMCwANETIME$ANETIME)
+dim(CMCwANETIME)
+ANETIMEtt<-t.test(ANETIME~Complication, data = CMCwANETIME)
+ANETIMEtt$p.value
+ANETIMEtt
+sd(CMCwANETIME[CMCwANETIME$Complication=="FALSE",]$ANETIME)
+sd(CMCwANETIME[CMCwANETIME$Complication=="TRUE",]$ANETIME)
+```
+
+
+
+
+-----------------
+http://www.stats.uwo.ca/faculty/murdoch/ism2013/4tables.pdf
+https://www.inf.ethz.ch/personal/markusp/teaching/guides/guide-tables.pdf
+https://www.r-bloggers.com/making-publication-ready-tables-with-xtable/
+SAS: http://www.lexjansen.com/nesug/nesug03/ad/ad001.pdf
+LaTeX: http://tex.stackexchange.com/questions/112343/beautiful-table-samples
+LaTeX: http://cpansearch.perl.org/src/LIMAONE/LaTeX-Table-v1.0.6/examples/examples.pdf
+LaTeX: http://ctan.org/pkg/booktabs
+-----------------
+
+6. Multivariate logistic regression
+
+```{r,echo=FALSE}
+CMCaddComplication$AGE<-as.numeric(CMCaddComplication$AGE)
+CMCaddComplication$Complication<-factor(CMCaddComplication$Complication, levels = c("FALSE", "TRUE"))
+CMCaddComplication$DIABETES<-factor(CMCaddComplication$DIABETES, levels = c("NO", "INSULIN", "ORAL", "NON-INSULIN", "NULL"))
+fit1<-glm(Complication~DIABETES+ASACLAS+DIALYSIS+sixtyfive, data = CMCaddComplication, family = binomial)
+summary(fit1)
+exp(coef(fit1))
+exp(cbind(OR = coef(fit1), confint(fit1)))
+#######Interpreting Odds ratio: https://select-statistics.co.uk/blog/analysing-categorical-data-using-logistic-regression-models/
+
+
+#http://stackoverflow.com/questions/18449013/r-logistic-regression-area-under-curve
+prob=predict(fit1,type=c("response"))
+CMCwithPred<-CMCaddComplication
+CMCwithPred$prob<-prob
+library(pROC)
+g <- roc(Complication ~ prob, data = CMCwithPred)
+plot(g) 
+ci(g)
+```
