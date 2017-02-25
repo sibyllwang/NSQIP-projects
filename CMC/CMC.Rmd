@@ -1,0 +1,829 @@
+---
+title: "CMC"
+author: "Bo Wang"
+date: "November 20, 2016"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, echo=FALSE, include=FALSE}
+library(sas7bdat)
+library(dplyr)
+library(plyr)
+library(ggplot2)
+library("fmsb")
+```
+
+0. NSQIP: download automatically 
+
+```{r, echo=FALSE, include=FALSE}
+load("nsqip05_06.RDA")
+load("nsqip07.RDA")
+load("nsqip08.RDA")
+load("nsqip09.RDA") 
+load("nsqip10.RDA")
+load("nsqip11.RDA")
+load("nsqip12.RDA")
+load("nsqip13.RDA")
+load("nsqip14.RDA")
+load("nsqip15.RDA")
+```
+
+
+1. Data: CMC-Interposition arthroplasty, intercarpal or carpometacarpal joints (25447) and Arthroplasty with prosthetic replacement, trapezium (25445). 
+
+
+```{r, echo=FALSE, include=FALSE}
+### Pull out all Interposition arthroplasty, intercarpal or carpometacarpal joints (25447) from one year's dataset. It's easier to keep each year's data separate since they include different number of variables under different names. Combining all years' datasets after subsetting will save computing power.  
+intArthFun<-function(data){
+  temp<-data %>%
+  filter(CPT==25447)
+  intArthYr<-temp %>%
+    arrange(CPT)
+}
+
+intArth05_06<-intArthFun(nsqip05_06)
+intArth07<-intArthFun(nsqip07)
+intArth08<-intArthFun(nsqip08)
+intArth09<-intArthFun(nsqip09)
+intArth10<-intArthFun(nsqip10)
+intArth11<-intArthFun(nsqip11)
+intArth12<-intArthFun(nsqip12)
+intArth13<-intArthFun(nsqip13)
+intArth14<-intArthFun(nsqip14)
+intArth15<-intArthFun(nsqip15)
+```
+
+
+```{r, echo=FALSE, include=FALSE}
+### Pull out all Arthroplasty with prosthetic replacement, trapezium (25445) from one dataset
+ArthProFun<-function(data){
+  temp<-data %>%
+  filter(CPT==25445)
+  ArthProYr<-temp %>%
+    arrange(CPT)
+}
+
+ArthPro05_06<-ArthProFun(nsqip05_06)
+ArthPro07<-ArthProFun(nsqip07)
+ArthPro08<-ArthProFun(nsqip08)
+ArthPro09<-ArthProFun(nsqip09)
+ArthPro10<-ArthProFun(nsqip10)
+ArthPro11<-ArthProFun(nsqip11)
+ArthPro12<-ArthProFun(nsqip12)
+ArthPro13<-ArthProFun(nsqip13)
+ArthPro14<-ArthProFun(nsqip14)
+ArthPro15<-ArthProFun(nsqip15)
+```
+
+
+```{r, echo=FALSE, include=FALSE}
+### CMCyr is a combiniation of both intercarpal or carpometacarpal joints (25447) and arthroplasty with prosthetic replacement, trapezium (25445)
+CMC05_06<-rbind(intArth05_06, ArthPro05_06)
+CMC07<-rbind(intArth07, ArthPro07)
+CMC08<-rbind(intArth08, ArthPro08)
+CMC09<-rbind(intArth09, ArthPro09)
+CMC10<-rbind(intArth10, ArthPro10)
+CMC11<-rbind(intArth11, ArthPro11)
+CMC12<-rbind(intArth12, ArthPro12)
+CMC13<-rbind(intArth13, ArthPro13)
+CMC14<-rbind(intArth14, ArthPro14)
+CMC15<-rbind(intArth15, ArthPro15)
+
+### Change all column names to UPPER in preparation of binding
+names(CMC05_06)<-toupper(names(CMC05_06))
+names(CMC07)<-toupper(names(CMC07))
+names(CMC08)<-toupper(names(CMC08))
+names(CMC09)<-toupper(names(CMC09))
+names(CMC10)<-toupper(names(CMC10))
+names(CMC11)<-toupper(names(CMC11))
+names(CMC12)<-toupper(names(CMC12))
+names(CMC13)<-toupper(names(CMC13))
+names(CMC14)<-toupper(names(CMC14))
+names(CMC15)<-toupper(names(CMC15))
+```
+
+
+```{r, echo=FALSE, include=FALSE}
+### Binding
+### http://stackoverflow.com/questions/3402371/combine-two-data-frames-by-rows-rbind-when-they-have-different-sets-of-columns
+
+### RACE for 2005-07, RACE_NEW 2008-15
+names(CMC08)[3]<-"RACE"
+names(CMC09)[3]<-"RACE"
+names(CMC10)[3]<-"RACE"
+names(CMC11)[3]<-"RACE"
+names(CMC12)[3]<-"RACE"
+names(CMC13)[3]<-"RACE"
+names(CMC14)[3]<-"RACE"
+names(CMC15)[4]<-"RACE"
+
+CMC<-rbind.fill(CMC05_06, CMC07, CMC08, CMC09, CMC10, CMC11, CMC12, CMC13, CMC14, CMC15)
+
+### RACE 2005-08 change to RACE_NEW values
+CMC$RACE<-gsub("White,(.*)?", "White", CMC$RACE)
+CMC$RACE<-gsub("Hispanic, White", "White", CMC$RACE)
+CMC$RACE<-gsub("Hispanic, Black", "Black or African American", CMC$RACE)
+CMC$RACE<-gsub("Unknown(.*)?", "Unknown", CMC$RACE)
+CMC$RACE<-gsub("NULL", "Unknown", CMC$RACE)
+
+### AGE to numeric
+which(CMC$AGE=="90+")
+### https://stat.ethz.ch/pipermail/r-help/2008-December/182748.html
+levels(CMC$AGE) <- c(levels(CMC$AGE), "90")
+CMC$AGE[c(473,1642,2214)]<-c("90", "90", "90")
+CMC$AGE<-as.numeric(as.character(CMC$AGE))
+```
+
+
+2. Basic summary of CMC data
+
+Number of patients and variables overall
+```{r}
+dim(CMC)
+```
+
+Number of patients and variables for each year
+```{r, echo=FALSE}
+dim05_06<-dim(CMC05_06)
+dim07<-dim(CMC07)
+dim08<-dim(CMC08)
+dim09<-dim(CMC09)
+dim10<-dim(CMC10)
+dim11<-dim(CMC11)
+dim12<-dim(CMC12)
+dim13<-dim(CMC13)
+dim14<-dim(CMC14)
+dim15<-dim(CMC15)
+dims<-c(dim05_06, dim07, dim08, dim09, dim10, dim11, dim12, dim13, dim14, dim15)
+dims<-as.data.frame(matrix(dims, nrow = 2))
+rownames(dims)<-c("patients", "variables")
+colnames(dims)<-c("2005-06", "2007", "2008", "2009", "2010", "2011", "2012", "2013", "2014", "2015")
+dims
+```
+
+Summary tables
+```{r, echo=FALSE}
+tables<-apply(CMC, 2, table)
+tables["RACE"]
+tables["SEX"]
+tables["CPT"]
+```
+
+See specific table(s)
+```{r}
+which(names(CMC)=="RACE")
+tables[41:42]
+```
+
+Summaries as data frame
+```{r, echo=FALSE}
+### see tables in df form
+tbToDf<-function(tb){
+  df<-as.data.frame(unlist(tb))
+  names(df)<-c("","Count")
+  df
+}
+dfs<-lapply(tables, tbToDf)
+```
+
+```{r}
+names(dfs)<-names(CMC)
+dfs["RACE"]
+dfs["SEX"]
+```
+
+
+3. Complications
+```{r}
+complications<-c("SUPINFEC", "SSSIPATOS", "WNDINFD", 
+        "DSSIPATOS", "ORGSPCSSI", "OSSIPATOS",
+        "DEHIS", "OUPNEUMO", "PNAPATOS",    
+        "REINTUB", "PULEMBOL","FAILWEAN", 
+        "VENTPATOS", "RENAINSF", "OPRENAFL",
+        "URNINFEC", "UTIPATOS",  "CNSCVA",
+        "CDARREST", "CDMI", "OTHBLEED",  
+        "OTHDVT", "OTHSYSEP",  "SEPSISPATOS", 
+        "OTHSESHOCK", "SEPSHOCKPATOS", "RETURNOR",
+        "OTHCDIFF", "RETORRELATED", "RETOR2RELATED", 
+        "READMRELATED1", "READMRELATED2", "READMRELATED3", 
+        "READMRELATED4", "READMRELATED5", "REOPERATION",
+        "READMISSION", "UNPLANREADMISSION", "OTHGRAFL", 
+        "COMA", "NEURODEF")
+```
+
+Number of unique patients with complications (1.6%)
+```{r, echo=FALSE}
+### function to assign Y/N complication column 
+complicationOrNot<-function(df){
+  Complication<-vector()
+for(i in 1:nrow(df)) {if((all(df[,complications][i,]=="No" 
+                          | df[,complications][i,]=="No Complication"
+                          | df[,complications][i,]=="NULL"
+                          | is.na(df[,complications][i,])))==TRUE){
+                 Complication[i]<-"FALSE"
+                 } else {
+                 Complication[i]<-"TRUE"}}
+  df<-cbind(df, Complication)
+}
+CMCaddComplication<-complicationOrNot(CMC)
+CMCaddComplication[CMC$DOPERTOD==29,]$Complication<-TRUE
+table(CMCaddComplication$Complication)
+```
+
+
+0.3% Return OR 
+```{r, echo=FALSE}
+table(CMCaddComplication$RETURNOR)
+```
+
+Distribution of complications (SAME AS DRfx PAPER)
+```{r, echo=FALSE}
+CMCwithComplication<-CMCaddComplication[CMCaddComplication$Complication==TRUE,]
+CMCwoComplication<-CMCaddComplication[CMCaddComplication$Complication==FALSE,]
+complicationTables<-list(
+table(CMCwithComplication$SUPINFEC),
+table(CMCwithComplication$WNDINFD),
+table(CMCwithComplication$ORGSPCSSI),
+table(CMCwithComplication$DEHIS),
+table(CMCwithComplication$OUPNEUMO),
+table(CMCwithComplication$PULEMBOL),
+table(CMCwithComplication$REINTUB),
+table(CMCwithComplication$FAILWEAN),
+table(CMCwithComplication$CDARREST),
+table(CMCwithComplication$CDMI),
+table(CMCwithComplication$RENAINSF),
+table(CMCwithComplication$OPRENAFL),
+table(CMCwithComplication$CNSCVA),
+table(CMCwithComplication$OTHGRAFL),
+table(CMCwithComplication$COMA),
+table(CMCwithComplication$NEURODEF),
+table(CMCwithComplication$OTHDVT),
+table(CMCwithComplication$OTHSYSEP),
+table(CMCwithComplication$OTHSESHOCK),
+table(CMCwithComplication$RETURNOR),
+table(CMCwithComplication$OTHBLEED),
+table(CMCwithComplication$URNINFEC)
+)
+
+
+
+compl1<-c("SUPINFEC", "WNDINFD", 
+        "ORGSPCSSI",
+        "DEHIS", "OUPNEUMO","PULEMBOL", 
+        "REINTUB", "FAILWEAN", 
+        "CDARREST","CDMI", "RENAINSF", "OPRENAFL",
+        "CNSCVA", "OTHGRAFL",
+        "COMA","NEURODEF", "OTHDVT",
+        "OTHSYSEP", "OTHSESHOCK",
+        "RETURNOR", "OTHBLEED",
+        "URNINFEC")
+complicationdfs<-lapply(complicationTables, tbToDf)
+names(complicationdfs)<-compl1
+```
+
+```{r, echo=FALSE, eval=FALSE}
+complicationdfs[1:20]
+```
+
+
+
+Distribution of complications (Added Readmission, OTHCDIFF, etc.)
+```{r, echo=FALSE}
+CMCwithComplication<-CMCaddComplication[CMCaddComplication$Complication==TRUE,]
+complicationTables2<-list(
+table(CMCwithComplication$SUPINFEC),
+table(CMCwithComplication$WNDINFD),
+table(CMCwithComplication$ORGSPCSSI),
+table(CMCwithComplication$DEHIS),
+table(CMCwithComplication$OUPNEUMO),
+table(CMCwithComplication$PULEMBOL),
+table(CMCwithComplication$REINTUB),
+table(CMCwithComplication$FAILWEAN),
+table(CMCwithComplication$CDARREST),
+table(CMCwithComplication$CDMI),
+table(CMCwithComplication$RENAINSF),
+table(CMCwithComplication$OPRENAFL),
+table(CMCwithComplication$CNSCVA),
+table(CMCwithComplication$OTHGRAFL),
+table(CMCwithComplication$COMA),
+table(CMCwithComplication$NEURODEF),
+table(CMCwithComplication$OTHDVT),
+table(CMCwithComplication$OTHSYSEP),
+table(CMCwithComplication$OTHSESHOCK),
+table(CMCwithComplication$RETURNOR),
+table(CMCwithComplication$OTHBLEED),
+table(CMCwithComplication$URNINFEC),
+
+table(CMCwithComplication$SSSIPATOS),
+table(CMCwithComplication$DSSIPATOS),
+table(CMCwithComplication$OSSIPATOS),
+table(CMCwithComplication$PNAPATOS),
+table(CMCwithComplication$VENTPATOS),
+table(CMCwithComplication$UTIPATOS),
+table(CMCwithComplication$SEPSISPATOS),
+table(CMCwithComplication$SEPSHOCKPATOS),
+
+table(CMCwithComplication$OTHCDIFF),
+table(CMCwithComplication$RETORRELATED),
+table(CMCwithComplication$RETOR2RELATED),
+table(CMCwithComplication$READMRELATED1),
+table(CMCwithComplication$READMRELATED2),
+table(CMCwithComplication$READMRELATED3),
+table(CMCwithComplication$READMRELATED4),
+table(CMCwithComplication$READMRELATED5),
+table(CMCwithComplication$REOPERATION),
+table(CMCwithComplication$READMISSION),
+table(CMCwithComplication$UNPLANREADMISSION)
+)
+complicationdfs2<-lapply(complicationTables2, tbToDf)
+compl2<-c("SUPINFEC", "WNDINFD", 
+        "ORGSPCSSI",
+        "DEHIS", "OUPNEUMO","PULEMBOL", 
+        "REINTUB", "FAILWEAN", 
+        "CDARREST","CDMI", "RENAINSF", "OPRENAFL",
+        "CNSCVA", "OTHGRAFL",
+        "COMA","NEURODEF", "OTHDVT",
+        "OTHSYSEP", "OTHSESHOCK",
+        "RETURNOR", "OTHBLEED",
+        "URNINFEC", "SSSIPATOS",   
+        "DSSIPATOS", "OSSIPATOS",
+        "PNAPATOS", "VENTPATOS",   
+        "UTIPATOS", "SEPSISPATOS", 
+        "SEPSHOCKPATOS", "OTHCDIFF",
+        "RETORRELATED", "RETOR2RELATED", 
+                 "READMRELATED1", "READMRELATED2", "READMRELATED3", 
+                 "READMRELATED4", "READMRELATED5", "REOPERATION",
+                 "READMISSION", "UNPLANREADMISSION"
+        )
+names(complicationdfs2)<-compl2
+
+####################################################################
+#crtTbLst<-function(df, vec){                                      #
+#complicationdfs2<-list()                                          #
+#for(i in 1:length(vec)){                                          #
+#  complicationdfs2[i]<-table(df[,vec[i]])                         #
+#}                                                                 #
+#complicationdfs2                                                  #
+#}                                                                 #
+#                                                                  #
+#complicationTables3<-crtTbLst(CMCwithComplication, compl2)        #
+####################################################################
+
+```
+
+Total of 72 complications
+```{r, echo=FALSE}
+complicationdfs2[1:41]
+```
+
+
+4. 2*2 Tables (categorical variable v. Complication (Y/N))
+
+```{r}
+##function to get rid of all 0 rows in a table
+ridZero<-function(tb){
+  num<-1
+  while(num<=dim(tb)[1]){
+    if(all(tb[num,]==0)==TRUE){
+      tb<-tb[-num,]
+      num<-num
+    }else{
+      tb<-tb
+      num<-num+1
+    }
+  }
+  tb
+}
+```
+
+SEX
+```{r, echo=FALSE}
+SEXtb<-table(CMCaddComplication[, c("SEX", "Complication")])
+SEXtb
+SEXtb<-SEXtb[-3,]
+SEXtb
+SEXchisq<-chisq.test(SEXtb, simulate.p.value = TRUE)
+SEXchisq$p.value
+```
+
+RACE
+```{r, echo=FALSE}
+RACEtb<-table(CMCaddComplication[, c("RACE", "Complication")])
+RACEtb
+RACEtb<-RACEtb[-5,]
+RACEtb
+RACEchisq<-chisq.test(RACEtb, simulate.p.value = TRUE)
+RACEchisq$p.value
+RACEanova<-anova(RACEtb)
+```
+
+INOUT
+```{r, echo=FALSE}
+INOUTtb<-table(CMCaddComplication[, c("INOUT", "Complication")])
+INOUTtb<-INOUTtb[-3,]
+INOUTtb
+INOUTchisq<-chisq.test(INOUTtb, simulate.p.value = TRUE)
+INOUTchisq$p.value
+```
+
+TRANST
+```{r, echo=FALSE}
+TRANSTtb<-table(CMCaddComplication[, c("TRANST", "Complication")])
+TRANSTtb<-ridZero(TRANSTtb)
+TRANSTtb
+TRANSTchisq<-chisq.test(TRANSTtb, simulate.p.value = TRUE)
+TRANSTchisq$p.value
+
+TRANSTtb2<-TRANSTtb[c(1,4),]
+TRANSTtb2
+TRANSTchisq2<-chisq.test(TRANSTtb2, simulate.p.value = TRUE)
+TRANSTchisq2$p.value
+```
+
+ATTEND
+```{r, echo=FALSE}
+ATTENDtb<-table(CMCaddComplication[, c("ATTEND", "Complication")])
+ATTENDtb<-ridZero(ATTENDtb)
+ATTENDtb
+ATTENDtb2<-ATTENDtb[c(-3,-5),]
+ATTENDtb2
+ATTENDchisq2<-chisq.test(ATTENDtb2, simulate.p.value = TRUE)
+ATTENDchisq2$p.value
+```
+
+ANESTHES
+```{r, echo=FALSE}
+ANESTHEStb<-table(CMCaddComplication[, c("ANESTHES", "Complication")])
+ANESTHEStb<-ridZero(ANESTHEStb)
+ANESTHEStb
+ANESTHESchisq<-chisq.test(ANESTHEStb, simulate.p.value = TRUE)
+ANESTHESchisq$p.value
+ANESTHEStb[,2]/(ANESTHEStb[,1]+ANESTHEStb[,2])
+ANESTHEStb2<-ANESTHEStb[c(2,7,11),]
+ANESTHEStb2
+ANESTHESchisq2<-chisq.test(ANESTHEStb2, simulate.p.value = TRUE)
+ANESTHESchisq2$p.value
+ANESTHEStb2[,2]/(ANESTHEStb2[,1]+ANESTHEStb2[,2])
+```
+
+SURGSPEC
+```{r, echo=FALSE}
+SURGSPECtb<-table(CMCaddComplication[, c("SURGSPEC", "Complication")])
+SURGSPECtb<-ridZero(SURGSPECtb)
+SURGSPECtb
+SURGSPECchisq<-chisq.test(SURGSPECtb, simulate.p.value = TRUE)
+SURGSPECchisq$p.value
+SURGSPECtb2<-SURGSPECtb[c(1,3,5),]
+SURGSPECtb2
+SURGSPECchisq2<-chisq.test(SURGSPECtb2, simulate.p.value = TRUE)
+SURGSPECchisq2$p.value
+```
+
+DIABETES
+```{r, echo=FALSE}
+DIABETEStb<-table(CMCaddComplication[, c("DIABETES", "Complication")])
+DIABETEStb<-ridZero(DIABETEStb)
+DIABETEStb
+DIABETESchisq<-chisq.test(DIABETEStb, simulate.p.value = TRUE)
+DIABETESchisq$p.value
+DIABETEStb[,2]/(DIABETEStb[,1]+DIABETEStb[,2])
+```
+
+SMOKE
+```{r, echo=FALSE}
+SMOKEtb<-table(CMCaddComplication[, c("SMOKE", "Complication")])
+SMOKEtb<-ridZero(SMOKEtb)
+SMOKEtb
+SMOKEchisq<-chisq.test(SMOKEtb, simulate.p.value = TRUE)
+SMOKEchisq$p.value
+```
+
+ETOH
+```{r, echo=FALSE}
+ETOHtb<-table(CMCaddComplication[, c("ETOH", "Complication")])
+ETOHtb<-ridZero(ETOHtb)
+ETOHtb<-ETOHtb[-3,]
+ETOHtb
+ETOHchisq<-chisq.test(ETOHtb, simulate.p.value = TRUE)
+ETOHchisq$p.value
+```
+
+CPT
+```{r, echo=FALSE}
+CPTtb<-table(CMCaddComplication[, c("CPT", "Complication")])
+CPTtb<-ridZero(CPTtb)
+CPTtb
+CPTchisq<-chisq.test(CPTtb, simulate.p.value = TRUE)
+CPTchisq$p.value
+```
+
+HYPERMED
+```{r, echo=FALSE}
+HYPERMEDtb<-table(CMCaddComplication[, c("HYPERMED", "Complication")])
+HYPERMEDtb<-ridZero(HYPERMEDtb)
+HYPERMEDtb
+HYPERMEDchisq<-chisq.test(HYPERMEDtb, simulate.p.value = TRUE)
+HYPERMEDchisq$p.value
+```
+
+WNDCLAS
+```{r, echo=FALSE}
+WNDCLAStb<-table(CMCaddComplication[, c("WNDCLAS", "Complication")])
+WNDCLAStb<-ridZero(WNDCLAStb)
+WNDCLAStb
+WNDCLASchisq<-chisq.test(WNDCLAStb, simulate.p.value = TRUE)
+WNDCLASchisq$p.value
+```
+
+ASACLAS
+```{r, echo=FALSE}
+ASACLAStb<-table(CMCaddComplication[, c("ASACLAS", "Complication")])
+ASACLAStb<-ridZero(ASACLAStb)
+ASACLAStb<-ASACLAStb[-5,]
+ASACLAStb
+ASACLASchisq<-chisq.test(ASACLAStb, simulate.p.value = TRUE)
+ASACLASchisq$p.value
+ASACLAStb[,2]/(ASACLAStb[,1]+ASACLAStb[,2])
+```
+
+BLEEDDIS
+```{r, echo=FALSE}
+BLEEDDIStb<-table(CMCaddComplication[, c("BLEEDDIS", "Complication")])
+BLEEDDIStb<-ridZero(BLEEDDIStb)
+BLEEDDIStb
+BLEEDDISchisq<-chisq.test(BLEEDDIStb, simulate.p.value = TRUE)
+BLEEDDISchisq$p.value
+BLEEDDIStb[,2]/(BLEEDDIStb[,1]+BLEEDDIStb[,2])
+```
+
+HXCHF
+```{r, echo=FALSE}
+HXCHFtb<-table(CMCaddComplication[, c("HXCHF", "Complication")])
+HXCHFtb<-ridZero(HXCHFtb)
+HXCHFtb
+HXCHFchisq<-chisq.test(HXCHFtb, simulate.p.value = TRUE)
+HXCHFchisq$p.value
+```
+
+STEROID
+```{r, echo=FALSE}
+STEROIDtb<-table(CMCaddComplication[, c("STEROID", "Complication")])
+STEROIDtb<-ridZero(STEROIDtb)
+STEROIDtb
+STEROIDchisq<-chisq.test(STEROIDtb, simulate.p.value = TRUE)
+STEROIDchisq$p.value
+```
+
+CHEMO
+```{r, echo=FALSE}
+CHEMOtb<-table(CMCaddComplication[, c("CHEMO", "Complication")])
+CHEMOtb<-ridZero(CHEMOtb)
+CHEMOtb<-CHEMOtb[-3,]
+CHEMOtb
+CHEMOchisq<-chisq.test(CHEMOtb, simulate.p.value = TRUE)
+CHEMOchisq$p.value
+```
+
+RADIO
+```{r, echo=FALSE}
+RADIOtb<-table(CMCaddComplication[, c("RADIO", "Complication")])
+RADIOtb<-ridZero(RADIOtb)
+RADIOtb<-RADIOtb[-3,]
+RADIOtb
+RADIOchisq<-chisq.test(RADIOtb, simulate.p.value = TRUE)
+RADIOchisq$p.value
+```
+
+PRVPCI (all but year 2015)
+```{r, echo=FALSE}
+PRVPCItb<-table(CMCaddComplication[, c("PRVPCI", "Complication")])
+PRVPCItb<-ridZero(PRVPCItb)
+PRVPCItb<-PRVPCItb[-3,]
+PRVPCItb
+PRVPCIchisq<-chisq.test(PRVPCItb, simulate.p.value = TRUE)
+PRVPCIchisq$p.value
+```
+
+TRANSFUS
+```{r, echo=FALSE}
+TRANSFUStb<-table(CMCaddComplication[, c("TRANSFUS", "Complication")])
+TRANSFUStb
+```
+
+
+
+Predictors I didn't find in dataset (PUF):
+
+Intra-articular fracture
+
+Associated ORIF ulna styloid
+
+Current alcohol use
+
+Preoperative function - FNSTATUS1/FNSTATUS2
+All year but 2015 has both variables, 2015 only has FNSTATUS2
+```{r}
+table(CMCaddComplication$FNSTATUS1)
+```
+
+Chronic pulmonary obstructive disease
+
+Peripheral vascular disease
+
+Cardiac disease
+
+Cerebrovascular accident or transient ischemic attack
+
+
+
+5. Logistic regression (Continuous variable v. Complication (Y/N)))
+
+WORKRVU
+```{r, echo=FALSE}
+WORKRVUtt<-t.test(WORKRVU~Complication, data = CMCaddComplication)
+WORKRVUtt$p.value
+```
+
+AGE
+```{r}
+AGEtt<-t.test(AGE~Complication, data = CMCaddComplication)
+AGEtt
+sd(CMCwoComplication$OPTIME)
+range(CMCwoComplication$OPTIME)
+sd(CMCwithComplication$OPTIME)
+range(CMCwithComplication$OPTIME)
+```
+
+```{r, include=FALSE}
+overForty<-function(df){
+  Forty<-vector()
+for(i in 1:nrow(df)) {
+  if(df$AGE[i]>40){
+  Forty[i]<-TRUE
+  } else if(df$AGE[i]<=40){
+  Forty[i]<-FALSE
+  }
+  }
+  df<-cbind(df, Forty)
+  df
+}
+#####################################RISK UNDER/ABOVE 40##########################################
+```
+
+BMI
+```{r, echo=FALSE}
+CMCwHeight<-filter(CMCaddComplication, HEIGHT>=0)
+CMCwHeightWeight<-filter(CMCwHeight, WEIGHT>=0)
+dim(CMCwHeightWeight)
+CMCwHeightWeight$BMI<-CMCwHeightWeight$WEIGHT*0.45/(CMCwHeightWeight$HEIGHT*0.025)^2
+
+BMItt<-t.test(BMI~Complication, data = CMCwHeightWeight)
+BMItt$p.value
+```
+
+PRPT
+```{r}
+CMCwPRPT<-CMCaddComplication[CMCaddComplication$PRPT!=-99,]
+dim(CMCwPRPT)
+table(CMCwPRPT$Complication)
+```
+
+PRINR
+```{r}
+CMCwPRINR<-CMCaddComplication[CMCaddComplication$PRINR!=-99,]
+dim(CMCwPRINR)
+table(CMCwPRINR$Complication)
+PRINRtt<-t.test(PRINR~Complication, data = CMCwPRINR)
+PRINRtt$p.value
+```
+
+PRWBC
+```{r}
+CMCwPRWBC<-filter(CMCaddComplication, PRWBC>=0)
+dim(CMCwPRWBC)
+PRWBCtt<-t.test(PRWBC~Complication, data = CMCwPRWBC)
+PRWBCtt$p.value
+```
+
+PRCREAT
+```{r}
+CMCwPRCREAT<-filter(CMCaddComplication, PRCREAT>=0)
+dim(CMCwPRCREAT)
+PRCREATtt<-t.test(PRCREAT~Complication, data = CMCwPRCREAT)
+PRCREATtt$p.value
+```
+
+PRHCT
+```{r}
+CMCwPRHCT<-filter(CMCaddComplication, PRHCT>=0)
+dim(CMCwPRHCT)
+PRHCTtt<-t.test(PRHCT~Complication, data = CMCwPRHCT)
+PRHCTtt
+```
+
+OPTIME
+```{r}
+CMCwOPTIME<-filter(CMCaddComplication, OPTIME>=0)
+dim(CMCwOPTIME)
+OPTIMEtt<-t.test(OPTIME~Complication, data = CMCwOPTIME)
+OPTIMEtt$p.value
+sd(CMCwoComplication$AGE)
+range(CMCwoComplication$AGE)
+sd(CMCwithComplication$AGE)
+range(CMCwithComplication$AGE)
+```
+
+
+-----------------
+http://www.stats.uwo.ca/faculty/murdoch/ism2013/4tables.pdf
+https://www.inf.ethz.ch/personal/markusp/teaching/guides/guide-tables.pdf
+https://www.r-bloggers.com/making-publication-ready-tables-with-xtable/
+SAS: http://www.lexjansen.com/nesug/nesug03/ad/ad001.pdf
+LaTeX: http://tex.stackexchange.com/questions/112343/beautiful-table-samples
+LaTeX: http://cpansearch.perl.org/src/LIMAONE/LaTeX-Table-v1.0.6/examples/examples.pdf
+LaTeX: http://ctan.org/pkg/booktabs
+-----------------
+
+
+```{r, eval=FALSE, echo=FALSE}
+complications11<-c("ADMYR", "CASEID", "SUPINFEC", "SSSIPATOS", "WNDINFD", 
+        "DSSIPATOS", "ORGSPCSSI", "OSSIPATOS",
+        "DEHIS", "OUPNEUMO", "PNAPATOS",    
+        "REINTUB", "PULEMBOL","FAILWEAN", 
+        "VENTPATOS", "RENAINSF", "OPRENAFL",
+        "URNINFEC", 
+        ## MIGHT DELETE PATOS
+        "UTIPATOS",  
+        "CNSCVA",
+        "CDARREST", "CDMI", "OTHBLEED",  
+        "OTHDVT", "OTHSYSEP", 
+        "OTHSESHOCK", "RETURNOR", "REOPERATION", 
+        "READMISSION", "UNPLANREADMISSION")
+
+complications12<-c("ADMYR","CASEID", "SUPINFEC", "SSSIPATOS", "WNDINFD", 
+        "DSSIPATOS", "ORGSPCSSI", "OSSIPATOS",
+        "DEHIS", "OUPNEUMO", "PNAPATOS",    
+        "REINTUB", "PULEMBOL","FAILWEAN", 
+        "VENTPATOS", "RENAINSF", "OPRENAFL",
+        "URNINFEC", "UTIPATOS",  "CNSCVA",
+        "CDARREST", "CDMI", "OTHBLEED",  
+        "OTHDVT", "OTHSYSEP",  "SEPSISPATOS", 
+        "OTHSESHOCK", "SEPSHOCKPATOS", "RETURNOR", 
+        "RETORRELATED", "RETOR2RELATED","READMRELATED1", 
+        "READMRELATED2", "READMRELATED3", "READMRELATED4", 
+        "READMRELATED5")
+
+complications13<-c("AdmYR","CaseID", "SUPINFEC", "SSSIPATOS", "WNDINFD", 
+        "DSSIPATOS", "ORGSPCSSI", "OSSIPATOS",
+        "DEHIS", "OUPNEUMO", "PNAPATOS",    
+        "REINTUB", "PULEMBOL","FAILWEAN", 
+        "VENTPATOS", "RENAINSF", "OPRENAFL",
+        "URNINFEC", "UTIPATOS",  "CNSCVA",
+        "CDARREST", "CDMI", "OTHBLEED",  
+        "OTHDVT", "OTHSYSEP",  "SEPSISPATOS", 
+        "OTHSESHOCK", "SEPSHOCKPATOS", "RETURNOR",
+        "RETORRELATED", "RETOR2RELATED","READMRELATED1", 
+        "READMRELATED2", "READMRELATED3", "READMRELATED4", "READMRELATED5")
+
+complications14<-c("CaseID", "SUPINFEC", "SSSIPATOS", "WNDINFD", 
+        "DSSIPATOS", "ORGSPCSSI", "OSSIPATOS",
+        "DEHIS", "OUPNEUMO", "PNAPATOS",    
+        "REINTUB", "PULEMBOL","FAILWEAN", 
+        "VENTPATOS", "RENAINSF", "OPRENAFL",
+        "URNINFEC", "UTIPATOS",  "CNSCVA",
+        "CDARREST", "CDMI", "OTHBLEED",  
+        "OTHDVT", "OTHSYSEP",  "SEPSISPATOS", 
+        "OTHSESHOCK", "SEPSHOCKPATOS", "RETURNOR",
+        "RETORRELATED", "RETOR2RELATED","READMRELATED1", 
+        "READMRELATED2", "READMRELATED3", "READMRELATED4", "READMRELATED5")
+
+### http://stackoverflow.com/questions/11302985/match-with-negation
+### Negation of %in% -- no in
+"%ni%"<-Negate("%in%")
+complications11[complications11 %ni% complications]
+complications12[complications12 %ni% complications]
+complications13[complications13 %ni% complications]
+complications14[complications14 %ni% complications]
+```
+
+Here are all variables not included as "complications" 
+```{r, echo=FALSE}
+"%ni%"<-Negate("%in%")
+names(CMC)[names(CMC) %ni% complications]
+```
+
+
+
+
+
+
+
+
+
+
